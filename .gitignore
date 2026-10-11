@@ -1,3 +1,16 @@
-/wordmate
-/*.o
-/data/
+
+# macOS system files
+.DS_Store
+
+# C/C++ compiled object files and executables
+*.o
+*.out
+/a.out
+/main
+*.dSYM/
+
+# Build output folders
+build/
+
+# Log files
+*.log
