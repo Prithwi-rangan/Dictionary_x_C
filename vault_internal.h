@@ -2,33 +2,22 @@
 #define WORDMATE_VAULT_INTERNAL_H
 
 #include "wordmate.h"
-#include <stdint.h>
 
-#define VAULT_FORMAT_VERSION 1u
-#define VAULT_MAX_MESSAGE (MEANING_MAX - 1)
-#define VAULT_TAG_SIZE 8u
-#define VAULT_META_TEMP "data/vault.meta.tmp"
-#define VAULT_SECRET_TEMP "data/secrets.bin.tmp"
-#define VAULT_META_BACKUP "data/vault.meta.bak"
-#define VAULT_SECRET_BACKUP "data/secrets.bin.bak"
+/* The binary vault keeps a bounded number of fixed-size encrypted messages. */
+#define VAULT_MAX_MESSAGES 20
 
+/* Exact record written to secret.txt; magic identifies this file format. */
 typedef struct {
-    unsigned char magic[8];
-    uint32_t version;
-    uint64_t salt;
-    uint64_t password_check;
-    uint64_t wrapped_key;
-    uint64_t key_check;
-} VaultMeta;
+    char magic[8];
+    unsigned long password_hash;
+    unsigned int message_count;
+    char messages[VAULT_MAX_MESSAGES][MEANING_MAX];
+} VaultData;
 
-typedef struct {
-    uint32_t version;
-    uint32_t message_length;
-    uint64_t nonce;
-} VaultRecordHeader;
-
-int vault_auth_key(uint64_t *key);
-int vault_auth_recover(void);
-int vault_random_bytes(void *buffer, size_t length);
+/* Shared file I/O and in-memory lock state used by both vault source files. */
+int vault_load_data(VaultData *data);
+int vault_save_data(const VaultData *data);
+int vault_require_unlocked(void);
+void vault_set_unlocked(int unlocked);
 
 #endif

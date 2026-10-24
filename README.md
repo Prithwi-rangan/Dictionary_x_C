@@ -1,6 +1,6 @@
 # WordMate
 
-WordMate is a modular C terminal dictionary and vocabulary learning system. It imports the included `azdictionary.txt` on first launch and stores its working dictionary as one human-readable, alphabetically sorted text file per letter in `data/dictionary/`. A compact binary offset index for each letter enables binary search while preserving readable A-Z files.
+WordMate is a modular C dictionary and vocabulary learning program. It keeps dictionary entries in 26 alphabetically sorted text files under `data/dictionary/` and uses a small binary index for quick word searches. On first launch, it imports `azdictionary.txt` if that file is beside the program.
 
 ## Build and run
 
@@ -11,12 +11,13 @@ make
 ./wordmate exam 10 medium mixed
 ```
 
-The first launch imports the supplied dictionary and can take a little time. Keep `azdictionary.txt` beside the executable on that first launch. After initialization, WordMate uses the files under `data/`.
+`make` creates `data/dictionary/` when needed. The first launch builds the A-Z dictionary and indexes. Keep `azdictionary.txt` beside the program during that import.
 
 ## Commands
 
 ```text
 ./wordmate search apple
+./wordmate synonyms apple
 ./wordmate add sesquipedalian "characterized by long words" "long-winded, polysyllabic"
 ./wordmate update sesquipedalian "given to using long words" "verbose"
 ./wordmate delete sesquipedalian
@@ -25,6 +26,7 @@ The first launch imports the supplied dictionary and can take a little time. Kee
 ./wordmate memorized
 ./wordmate stats
 ./wordmate vault
+./wordmate exam 30 medium mixed
 ./wordmate guess-word
 ./wordmate guess-meaning
 ./wordmate word-search
@@ -32,22 +34,24 @@ The first launch imports the supplied dictionary and can take a little time. Kee
 ./wordmate performance
 ```
 
-Use quotes around multiword meanings or messages. Omitting a command opens the interactive menu. Select **Vocabulary games and tests** for the 10/20/50 question exam, difficulty and question type settings, guessing games and the 2D word-search game. Completed activities append to `data/activity_results.tsv`; use the history and performance options to review scores. The games load a compact sample of unique headwords and meanings from the same A-Z dictionary files.
+The menu supports adding, updating, deleting and searching words; spelling suggestions; Word of the Day; synonyms; memorized words with meanings; dictionary statistics; and vocabulary games. Spelling suggestions keep the first letter fixed and show candidates with more than 70% matching letter positions after it. Examinations support 10, 30 or 50 multiple-choice questions. Guess the Word gives a meaning clue and five lives. The 2D word search uses a 10-by-10 grid. Exam and game results are appended to `data/activity_results.tsv`.
 
 ## Secret Vault
 
-The vault is implemented in C and builds with the same compiler as the rest of WordMate; it has no third-party library dependency. Open **Secret Vault** from the main menu or run `./wordmate vault`. Create a password on first use, then unlock to add, read, or delete messages. Password input is hidden in an interactive terminal. The password is not written to the vault files. Changing the password keeps existing messages; reset requires typing `RESET` and replaces the vault with an empty one.
+The vault stores its binary data in `data/secret.txt`. It asks for a password before opening the vault. Five incorrect password attempts clear that file. Secret messages are transformed with the substitution mapping `abcdefghijklmnopqrstuvwxyz` to `lpzqaokmjinxwsrvfdcehyubgt`.
 
-**This is an educational C exercise, not real encryption.** The built-in password mixer, message transformation, and integrity check are custom algorithms and are not cryptographically secure. Do not store real passwords, financial information, or other sensitive data in this vault. The program uses the operating system's `/dev/urandom` for random values, but that does not make its homemade algorithms secure. Reset/deletion also does not promise forensic erasure from storage devices or backups.
+This substitution is a simple programming exercise and does not provide real security. The password check is also a basic educational hash, and password input is visible while typing. Do not store sensitive information in the vault.
 
-## Files
+The older `data/secrets.bin` and `data/vault.meta` files from earlier versions are not used by this implementation and are left untouched.
 
-- `wordmate.h`: shared types, constants, and prototypes
-- `main.c`, `menu.c`: command-line handling and interactive menu
-- `dictionary.c`: import, sorted A-Z files, persistent offset indexes, binary search, CRUD, spelling suggestions, Word of the Day, statistics, and the shared game-word pool
-- `learning.c`: memorized-word storage
-- `games.c`: MCQ exam, Guess the Word, Guess the Meaning, and 2D word search
-- `results.c`: persistent activity history and performance summary
-- `vault_auth.c`: C-only educational password handling, unlock, password change, and reset
-- `vault.c`: C-only educational message transformation and the Secret Vault submenu
+## Source files
+
+- `wordmate.h`: shared types, constants and function declarations
+- `main.c`, `menu.c`: command-line and interactive menu
+- `dictionary.c`: import, sorted A-Z files, indexes, search, editing, spelling suggestions and game-word loading
+- `learning.c`: synonym lookup and memorized words with meanings
+- `games.c`: MCQ exam, five-life Guess the Word, Guess the Meaning and 2D word search
+- `results.c`: activity history and performance statistics
+- `vault_auth.c`, `vault.c`: password gate and substitution-based secret file
+- `util.c`: input and word helpers
 - `Makefile`: build and clean targets

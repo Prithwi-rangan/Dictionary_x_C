@@ -1,72 +1,98 @@
 #include "wordmate.h"
 
-#include <ctype.h>
-#include <stdio.h>
-#include <string.h>
-#include <termios.h>
-#include <unistd.h>
-
+/* Remove either newline convention so prompts and file records compare cleanly. */
 void trim_newline(char *text) {
-    if (!text) return;
-    text[strcspn(text, "\r\n")] = '\0';
+    if (text) {
+        text[strcspn(text, "\r\n")] = '\0';
+    }
 }
 
-void normalize_word(char *word) {
-    if (!word) return;
-    while (isspace((unsigned char)*word)) memmove(word, word + 1, strlen(word));
-    size_t length = strlen(word);
-    while (length && isspace((unsigned char)word[length - 1])) word[--length] = '\0';
-    for (size_t i = 0; word[i]; ++i) word[i] = (char)tolower((unsigned char)word[i]);
-}
+/* Read one fixed-size text line and discard any part that would overflow the buffer. */
+int read_file_line(FILE *file, char *buffer, size_t size) {
+    size_t length;
+    int character;
 
-int word_file_path(const char *word, char *path, size_t size) {
-    if (!word || !word[0] || !isalpha((unsigned char)word[0])) return 0;
-    int n = snprintf(path, size, DICTIONARY_DIR "/%c.txt", tolower((unsigned char)word[0]));
-    return n > 0 && (size_t)n < size;
-}
-
-int read_password(const char *prompt, char *buffer, size_t size) {
-    if (!buffer || size < 2) return 0;
-    fputs(prompt, stdout);
-    fflush(stdout);
-    struct termios original, hidden;
-    int hide_input = 0;
-    if (isatty(STDIN_FILENO)) {
-        if (tcgetattr(STDIN_FILENO, &original) != 0) {
-            fputs("Could not configure hidden password input.\n", stderr);
-            return 0;
-        }
-        hidden = original;
-        hidden.c_lflag &= (tcflag_t)~ECHO;
-        if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &hidden) != 0) {
-            fputs("Could not hide password input.\n", stderr);
-            return 0;
-        }
-        hide_input = 1;
+    if (!file || !buffer || size == 0 || !fgets(buffer, (int)size, file)) {
+        return 0;
     }
-    char *read = fgets(buffer, (int)size, stdin);
-    if (hide_input) {
-        tcsetattr(STDIN_FILENO, TCSAFLUSH, &original);
-        putchar('\n');
-    }
-    if (!read) { buffer[0] = '\0'; return 0; }
-    size_t length = strlen(buffer);
-    if (length && buffer[length - 1] == '\n') {
-        buffer[--length] = '\0';
-        if (length && buffer[length - 1] == '\r') buffer[--length] = '\0';
-    } else if (!feof(stdin)) {
-        int ch = getchar();
-        if (ch != '\n' && ch != EOF) {
-            while (ch != '\n' && ch != EOF) ch = getchar();
-            buffer[0] = '\0';
-            fputs("Password input is too long.\n", stderr);
-            return 0;
+    length = strlen(buffer);
+    if (length > 0 && buffer[length - 1] != '\n' && !feof(file)) {
+        /* Consume the rest of an overlong record before the next read begins. */
+        while ((character = fgetc(file)) != '\n' && character != EOF) {
+            /* Discard the rest of an overlong line. */
         }
     }
+    trim_newline(buffer);
     return 1;
 }
 
+/* Trim surrounding whitespace and use lowercase for consistent word comparisons. */
+void normalize_word(char *word) {
+    size_t length;
+    size_t start = 0;
+
+    if (!word) {
+        return;
+    }
+    length = strlen(word);
+    while (start < length && isspace((unsigned char)word[start])) {
+        start++;
+    }
+    while (length > start && isspace((unsigned char)word[length - 1])) {
+        length--;
+    }
+    /* Move the trimmed text to the front before adding its new terminator. */
+    if (start > 0) {
+        memmove(word, word + start, length - start);
+    }
+    word[length - start] = '\0';
+    for (size_t i = 0; word[i]; ++i) {
+        word[i] = (char)tolower((unsigned char)word[i]);
+    }
+}
+
+/* A word is stored in the text file named for its first letter. */
+int word_file_path(const char *word, char *path, size_t size) {
+    int written;
+
+    if (!word || !word[0] || !isalpha((unsigned char)word[0])) {
+        return 0;
+    }
+    written = snprintf(path, size, DICTIONARY_DIR "/%c.txt",
+                       tolower((unsigned char)word[0]));
+    return written > 0 && (size_t)written < size;
+}
+
+/* Read a bounded password line; terminal input is visible in this simple version. */
+int read_password(const char *prompt, char *buffer, size_t size) {
+    size_t length;
+    int character;
+
+    if (!prompt || !buffer || size < 2) {
+        return 0;
+    }
+    fputs(prompt, stdout);
+    if (!fgets(buffer, (int)size, stdin)) {
+        buffer[0] = '\0';
+        return 0;
+    }
+    length = strlen(buffer);
+    if (length > 0 && buffer[length - 1] != '\n' && !feof(stdin)) {
+        while ((character = getchar()) != '\n' && character != EOF) {
+            /* Discard input that did not fit. */
+        }
+        buffer[0] = '\0';
+        puts("Password is too long.");
+        return 0;
+    }
+    trim_newline(buffer);
+    return 1;
+}
+
+/* Overwrite a buffer through a volatile pointer so the clearing writes are kept. */
 void secure_clear(void *memory, size_t size) {
     volatile unsigned char *bytes = (volatile unsigned char *)memory;
-    while (size--) *bytes++ = 0;
+    while (size--) {
+        *bytes++ = 0;
+    }
 }
