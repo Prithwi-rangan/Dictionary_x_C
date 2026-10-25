@@ -17,7 +17,6 @@ static int word_is_saved(const char *wanted) {
     fclose(file);
     return 0;
 }
-
 /* Look up a legacy saved word's meaning in the appropriate A-Z text file. */
 static int lookup_meaning(const char *word, char *meaning, size_t size) {
     char path[256];
@@ -65,7 +64,7 @@ int memorize_word(const char *word) {
     while (read_file_line(dictionary, line, sizeof(line))) {
         char copy[LINE_MAX];
         snprintf(copy, sizeof(copy), "%s", line);
-        /* The dictionary's text rows are tab-separated: word, meaning, synonyms. */
+        /* Dictionary rows are tab-separated: word, then meaning. */
         char *first = strchr(copy, '\t');
         if (!first) continue;
         *first++ = '\0';
@@ -126,33 +125,4 @@ int show_memorized(void) {
     fclose(file);
     if (!index) puts("You have no memorized words yet.");
     return index > 0;
-}
-
-/* Read the separate word|synonyms file used by searches and the CLI. */
-int learning_show_synonyms(const char *word) {
-    char normalized[WORD_MAX];
-    char line[LINE_MAX];
-    int found = 0;
-    snprintf(normalized, sizeof(normalized), "%s", word ? word : "");
-    normalize_word(normalized);
-    FILE *file = fopen(SYNONYM_FILE, "r");
-    if (!file) {
-        printf("No synonyms are recorded for '%s'.\n", normalized);
-        return 0;
-    }
-    while (read_file_line(file, line, sizeof(line))) {
-        char *separator = strchr(line, '|');
-        if (!separator) separator = strchr(line, '\t');
-        if (!separator) continue;
-        *separator++ = '\0';
-        normalize_word(line);
-        if (strcmp(line, normalized) == 0 && separator[0]) {
-            printf("Synonyms for %s: %s\n", normalized, separator);
-            found = 1;
-            break;
-        }
-    }
-    fclose(file);
-    if (!found) printf("No synonyms are recorded for '%s'.\n", normalized);
-    return found;
 }

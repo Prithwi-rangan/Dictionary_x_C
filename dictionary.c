@@ -8,6 +8,7 @@ typedef struct {
 
 static int read_word_line(char *line, Word *entry);
 static int sort_and_index_file(const char *text_path);
+static int dictionary_suggest(const char *word);
 
 /* Keep separators out of fields because tabs and pipes divide stored records. */
 static void clean_field(char *text) {
@@ -18,21 +19,16 @@ static void clean_field(char *text) {
     }
 }
 
-/* Store dictionary entries as word<TAB>meaning<TAB>synonyms. */
-static int write_entry(FILE *out, const char *word, const char *meaning,
-                       const char *synonyms) {
+/* Store each dictionary entry as a headword and its meaning. */
+static int write_entry(FILE *out, const char *word, const char *meaning) {
     char clean_word[WORD_MAX];
     char clean_meaning[MEANING_MAX];
-    char clean_synonyms[SYNONYMS_MAX];
 
     snprintf(clean_word, sizeof(clean_word), "%s", word);
     snprintf(clean_meaning, sizeof(clean_meaning), "%s", meaning);
-    snprintf(clean_synonyms, sizeof(clean_synonyms), "%s", synonyms ? synonyms : "");
     clean_field(clean_word);
     clean_field(clean_meaning);
-    clean_field(clean_synonyms);
-    return fprintf(out, "%s\t%s\t%s\n", clean_word, clean_meaning,
-                   clean_synonyms) >= 0;
+    return fprintf(out, "%s\t%s\n", clean_word, clean_meaning) >= 0;
 }
 
 /* Import the supplied word list once and split it into A-Z text files. */
@@ -79,7 +75,7 @@ static int import_source(void) {
                 if (current_word[0] && isalpha((unsigned char)current_word[0])) {
                     int letter = tolower((unsigned char)current_word[0]) - 'a';
                     if (letter >= 0 && letter < 26 &&
-                        write_entry(outputs[letter], current_word, current_meaning, "")) {
+                        write_entry(outputs[letter], current_word, current_meaning)) {
                         imported++;
                     }
                 }
@@ -101,7 +97,7 @@ static int import_source(void) {
             } else if (current_word[0]) {
                 int letter = tolower((unsigned char)current_word[0]) - 'a';
                 if (letter >= 0 && letter < 26 &&
-                    write_entry(outputs[letter], current_word, current_meaning, "")) {
+                    write_entry(outputs[letter], current_word, current_meaning)) {
                     imported++;
                 }
                 current_word[0] = '\0';
@@ -111,7 +107,7 @@ static int import_source(void) {
         if (current_word[0] && isalpha((unsigned char)current_word[0])) {
             int letter = tolower((unsigned char)current_word[0]) - 'a';
             if (letter >= 0 && letter < 26 &&
-                write_entry(outputs[letter], current_word, current_meaning, "")) {
+                write_entry(outputs[letter], current_word, current_meaning)) {
                 imported++;
             }
         }
@@ -151,22 +147,17 @@ static char *copy_line(const char *line) {
     return copy;
 }
 
-/* Split a stored row into its three fields; missing synonyms are allowed. */
+/* Read a headword and meaning, ignoring any extra field in older data rows. */
 static int read_word_line(char *line, Word *entry) {
     char *first;
-    char *second;
+    char *extra;
 
     trim_newline(line);
     first = strchr(line, '\t');
     if (!first) return 0;
     *first++ = '\0';
-    second = strchr(first, '\t');
-    if (second) {
-        *second++ = '\0';
-        snprintf(entry->synonyms, sizeof(entry->synonyms), "%s", second);
-    } else {
-        entry->synonyms[0] = '\0';
-    }
+    extra = strchr(first, '\t');
+    if (extra) *extra = '\0';
     snprintf(entry->word, sizeof(entry->word), "%s", line);
     snprintf(entry->meaning, sizeof(entry->meaning), "%s", first);
     return entry->word[0] != '\0';
@@ -282,55 +273,6 @@ static int build_all_indexes(void) {
     return 1;
 }
 
-/* Migrate inline synonyms into synonym.txt the first time the shared file is needed. */
-static int initialize_synonym_file(void) {
-    FILE *existing = fopen(SYNONYM_FILE, "r");
-    char line[LINE_MAX];
-    int has_rows = 0;
-    if (existing) {
-        while (read_file_line(existing, line, sizeof(line))) {
-            if (line[0]) { has_rows = 1; break; }
-        }
-        fclose(existing);
-    }
-    if (has_rows) return 1;
-
-    char temporary[96];
-    snprintf(temporary, sizeof(temporary), "%s.tmp", SYNONYM_FILE);
-    FILE *output = fopen(temporary, "w");
-    if (!output) return 0;
-    for (int i = 0; i < 26; ++i) {
-        char path[64];
-        snprintf(path, sizeof(path), DICTIONARY_DIR "/%c.txt", 'a' + i);
-        FILE *input = fopen(path, "r");
-        if (!input) continue;
-        while (read_file_line(input, line, sizeof(line))) {
-            Word entry;
-            char copy[LINE_MAX];
-            snprintf(copy, sizeof(copy), "%s", line);
-            if (read_word_line(copy, &entry) && entry.synonyms[0] &&
-                fprintf(output, "%s|%s\n", entry.word, entry.synonyms) < 0) {
-                fclose(input);
-                fclose(output);
-                remove(temporary);
-                return 0;
-            }
-        }
-        if (ferror(input)) {
-            fclose(input);
-            fclose(output);
-            remove(temporary);
-            return 0;
-        }
-        fclose(input);
-    }
-    if (fclose(output) != 0 || rename(temporary, SYNONYM_FILE) != 0) {
-        remove(temporary);
-        return 0;
-    }
-    return 1;
-}
-
 /* Import data when needed and ensure all 26 letter files have matching indexes. */
 int ensure_data_ready(void) {
     char marker[64];
@@ -372,18 +314,17 @@ int ensure_data_ready(void) {
         fputs("Sorted A-Z files with binary-search indexes.\n", done);
         fclose(done);
     }
-    return initialize_synonym_file();
+    return 1;
 }
 
-/* Print the dictionary fields; synonyms are read from the shared synonym file. */
-static void display_entry(const Word *entry, int show_synonyms) {
-    (void)show_synonyms;
+/* Print a word and its meaning with a consistent layout. */
+static void display_entry(const Word *entry) {
     printf("\n%s\n  %s\n", entry->word,
            entry->meaning[0] ? entry->meaning : "(no meaning recorded)");
 }
 
 /* Binary-search the selected letter's index, then read its text record by offset. */
-int dictionary_search(const char *word, int show_synonyms) {
+int dictionary_search(const char *word) {
     char normalized[WORD_MAX];
     char path[256];
     char index_path[256];
@@ -438,7 +379,7 @@ int dictionary_search(const char *word, int show_synonyms) {
         if (!read_word_line(line, &entry)) continue;
         int order = strcmp(entry.word, normalized);
         if (order == 0) {
-            display_entry(&entry, show_synonyms);
+            display_entry(&entry);
             found = 1;
         } else if (found || order > 0) {
             break;
@@ -448,8 +389,16 @@ int dictionary_search(const char *word, int show_synonyms) {
     if (!found) {
         printf("No entry found for '%s'.\n", normalized);
         dictionary_suggest(normalized);
-    } else if (show_synonyms) {
-        learning_show_synonyms(normalized);
+    } else {
+        /* Offer memorizing only after an exact, correctly spelled match. */
+        char answer[LINE_MAX];
+        printf("Memorize '%s'? Press y for yes, or Enter to skip: ", normalized);
+        if (fgets(answer, sizeof(answer), stdin)) {
+            trim_newline(answer);
+            if (tolower((unsigned char)answer[0]) == 'y') {
+                memorize_word(normalized);
+            }
+        }
     }
     return found;
 }
@@ -477,8 +426,7 @@ static int rewrite_letter(const char *path, const char *target,
                 matches++;
                 if (mode == 2 || mode == 3) {
                     if (mode == 3 && matches == 1 &&
-                        !write_entry(output, replacement->word, replacement->meaning,
-                                     replacement->synonyms)) ok = 0;
+                        !write_entry(output, replacement->word, replacement->meaning)) ok = 0;
                     continue;
                 }
             }
@@ -490,8 +438,7 @@ static int rewrite_letter(const char *path, const char *target,
     /* Reject duplicates on add and missing words on update/delete. */
     if (mode == 1) {
         if (matches) ok = 0;
-        else if (!write_entry(output, replacement->word, replacement->meaning,
-                              replacement->synonyms)) ok = 0;
+        else if (!write_entry(output, replacement->word, replacement->meaning)) ok = 0;
     } else if ((mode == 2 || mode == 3) && matches == 0) {
         ok = 0;
     }
@@ -501,59 +448,17 @@ static int rewrite_letter(const char *path, const char *target,
     return ok ? sort_and_index_file(path) : 0;
 }
 
-/* Keep synonym.txt sorted while replacing or removing one headword's synonyms. */
-static int rewrite_synonym_file(const char *word, const char *synonyms) {
-    FILE *input = fopen(SYNONYM_FILE, "r");
-    FILE *output;
-    char temp[96];
-    char line[LINE_MAX];
-    int inserted = 0;
-    int found = 0;
-    int ok = 1;
-
-    snprintf(temp, sizeof(temp), "%s.tmp", SYNONYM_FILE);
-    output = fopen(temp, "w");
-    if (!output) { if (input) fclose(input); return 0; }
-    if (input) {
-        while (read_file_line(input, line, sizeof(line))) {
-            char *separator = strchr(line, '|');
-            if (!separator) separator = strchr(line, '\t');
-            if (separator) {
-                *separator = '\0';
-                if (strcmp(line, word) == 0) {
-                    found = 1;
-                    continue;
-                }
-                if (!inserted && synonyms[0] && strcmp(line, word) > 0) {
-                    if (fprintf(output, "%s|%s\n", word, synonyms) < 0) ok = 0;
-                    inserted = 1;
-                }
-                if (fprintf(output, "%s|%s\n", line, separator + 1) < 0) ok = 0;
-            }
-        }
-        if (ferror(input)) ok = 0;
-        fclose(input);
-    }
-    (void)found;
-    if (synonyms[0] && !inserted && fprintf(output, "%s|%s\n", word, synonyms) < 0) ok = 0;
-    if (fclose(output) != 0) ok = 0;
-    if (ok && rename(temp, SYNONYM_FILE) != 0) ok = 0;
-    if (!ok) remove(temp);
-    return ok;
-}
-
-/* Normalize and sanitize all user-entered fields before writing them to files. */
+/* Normalize and sanitize the headword and meaning before saving an entry. */
 static int normalize_entry(Word *word) {
     if (!word || !word->word[0]) return 0;
     normalize_word(word->word);
     if (!isalpha((unsigned char)word->word[0])) return 0;
     clean_field(word->word);
     clean_field(word->meaning);
-    clean_field(word->synonyms);
     return 1;
 }
 
-/* Add a new entry, then synchronize its optional synonyms with synonym.txt. */
+/* Add a new dictionary entry. */
 int dictionary_add(const Word *word) {
     char normalized[WORD_MAX];
     char path[256];
@@ -565,7 +470,6 @@ int dictionary_add(const Word *word) {
         printf("'%s' already exists or could not be saved. Use update to replace it.\n", normalized);
         return 0;
     }
-    rewrite_synonym_file(normalized, copy.synonyms);
     printf("Added '%s'.\n", normalized);
     return 1;
 }
@@ -582,12 +486,11 @@ int dictionary_update(const Word *word) {
         printf("No entry found for '%s'.\n", normalized);
         return 0;
     }
-    rewrite_synonym_file(normalized, copy.synonyms);
     printf("Updated '%s'.\n", normalized);
     return 1;
 }
 
-/* Remove every row for a headword and its matching shared synonym record. */
+/* Remove every dictionary row for a headword. */
 int dictionary_delete(const char *word) {
     char normalized[WORD_MAX];
     char path[256];
@@ -598,7 +501,6 @@ int dictionary_delete(const char *word) {
         printf("No entry found for '%s'.\n", normalized);
         return 0;
     }
-    rewrite_synonym_file(normalized, "");
     printf("Deleted all definitions for '%s'.\n", normalized);
     return 1;
 }
@@ -619,14 +521,12 @@ static int positional_similarity(const char *search, const char *candidate) {
 }
 
 /* Suggest same-first-letter entries whose remaining positions match over 70%. */
-int dictionary_suggest(const char *word) {
+static int dictionary_suggest(const char *word) {
     char normalized[WORD_MAX];
     char path[64];
     char previous_word[WORD_MAX] = "";
     Word suggestions[10] = {{0}};
     size_t suggestion_count = 0;
-    Word exact_entry = {0};
-    int exact_found = 0;
 
     snprintf(normalized, sizeof(normalized), "%s", word ? word : "");
     normalize_word(normalized);
@@ -642,21 +542,10 @@ int dictionary_suggest(const char *word) {
         /* A headword may have several definitions, but should appear only once. */
         if (strcmp(entry.word, previous_word) == 0) continue;
         snprintf(previous_word, sizeof(previous_word), "%s", entry.word);
-        /* An exact match confirms the spelling and should show its meaning. */
-        if (strcmp(entry.word, normalized) == 0) {
-            exact_entry = entry;
-            exact_found = 1;
-            continue;
-        }
         if (positional_similarity(normalized, entry.word) > 70 && suggestion_count < 10)
             suggestions[suggestion_count++] = entry;
     }
     fclose(file);
-    if (exact_found) {
-        puts("The spelling is correct:");
-        display_entry(&exact_entry, 0);
-        return 1;
-    }
     if (!suggestion_count) {
         puts("No spelling suggestions were found.");
         return 0;
@@ -685,7 +574,7 @@ int dictionary_suggest(const char *word) {
         return 1;
     }
 
-    display_entry(&suggestions[selected - 1], 0);
+    display_entry(&suggestions[selected - 1]);
     return 1;
 }
 
@@ -733,7 +622,7 @@ int dictionary_random(void) {
         Word entry;
         if (read_file_line(text, line, sizeof(line)) && read_word_line(line, &entry)) {
             puts("Word of the Day:");
-            display_entry(&entry, 0);
+            display_entry(&entry);
             fclose(text);
             return 1;
         }
@@ -741,22 +630,6 @@ int dictionary_random(void) {
         return 0;
     }
     return 0;
-}
-
-/* Count comma-separated synonym names while ignoring empty items and spaces. */
-static int count_synonyms_in_field(const char *text) {
-    int count = 0;
-    int has_character = 0;
-    for (const char *p = text; ; ++p) {
-        if (*p == ',' || *p == '\0') {
-            if (has_character) count++;
-            has_character = 0;
-            if (*p == '\0') break;
-        } else if (!isspace((unsigned char)*p)) {
-            has_character = 1;
-        }
-    }
-    return count;
 }
 
 /* Count non-empty rows in the user's memorized-word list. */
@@ -772,44 +645,16 @@ static size_t count_memorized_words(void) {
     return count;
 }
 
-/* Summarize indexed headwords, memorized entries, and recorded synonyms. */
+/* Show the total number of dictionary and memorized words. */
 int dictionary_stats(void) {
     size_t words = 0;
-    size_t synonyms = 0;
     char path[64];
     for (int i = 0; i < 26; ++i) {
         snprintf(path, sizeof(path), DICTIONARY_DIR "/%c.idx", 'a' + i);
         words += index_record_count(path);
-        snprintf(path, sizeof(path), DICTIONARY_DIR "/%c.txt", 'a' + i);
-        FILE *file = fopen(path, "r");
-        if (!file) continue;
-        char line[LINE_MAX];
-        Word entry;
-        while (read_file_line(file, line, sizeof(line))) {
-            if (read_word_line(line, &entry)) synonyms += count_synonyms_in_field(entry.synonyms);
-        }
-        fclose(file);
     }
-    FILE *synonym_file = fopen(SYNONYM_FILE, "r");
-    if (synonym_file) {
-        char line[LINE_MAX];
-        size_t records = 0;
-        while (read_file_line(synonym_file, line, sizeof(line))) {
-            if (strchr(line, '|')) records++;
-        }
-        fclose(synonym_file);
-        if (records) {
-            synonyms = 0;
-            synonym_file = fopen(SYNONYM_FILE, "r");
-            while (synonym_file && read_file_line(synonym_file, line, sizeof(line))) {
-                char *separator = strchr(line, '|');
-                if (separator) synonyms += count_synonyms_in_field(separator + 1);
-            }
-            if (synonym_file) fclose(synonym_file);
-        }
-    }
-    printf("Dictionary words: %zu\nMemorized words: %zu\nSynonyms: %zu\nBuild date: %s\n",
-           words, count_memorized_words(), synonyms, __DATE__);
+    printf("Dictionary words: %zu\nMemorized words: %zu\nBuild date: %s\n",
+           words, count_memorized_words(), __DATE__);
     return 1;
 }
 

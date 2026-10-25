@@ -3,7 +3,7 @@ CC ?= cc
 CFLAGS ?= -std=c11 -Wall -Wextra -Wpedantic -O2
 LDFLAGS ?=
 TARGET = wordmate
-SOURCES = main.c menu.c dictionary.c learning.c games.c results.c vault.c vault_auth.c util.c
+SOURCES = main.c menu.c dictionary.c learning.c games.c results.c util.c
 OBJECTS = $(SOURCES:.c=.o)
 
 .PHONY: all clean prepare
@@ -22,8 +22,6 @@ $(TARGET): $(OBJECTS)
 
 %.o: %.c wordmate.h
 	$(CC) $(CFLAGS) -c $< -o $@
-
-vault.o vault_auth.o: vault_internal.h
 
 # Remove generated build outputs without touching dictionary or user data files.
 clean:

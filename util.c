@@ -62,37 +62,3 @@ int word_file_path(const char *word, char *path, size_t size) {
                        tolower((unsigned char)word[0]));
     return written > 0 && (size_t)written < size;
 }
-
-/* Read a bounded password line; terminal input is visible in this simple version. */
-int read_password(const char *prompt, char *buffer, size_t size) {
-    size_t length;
-    int character;
-
-    if (!prompt || !buffer || size < 2) {
-        return 0;
-    }
-    fputs(prompt, stdout);
-    if (!fgets(buffer, (int)size, stdin)) {
-        buffer[0] = '\0';
-        return 0;
-    }
-    length = strlen(buffer);
-    if (length > 0 && buffer[length - 1] != '\n' && !feof(stdin)) {
-        while ((character = getchar()) != '\n' && character != EOF) {
-            /* Discard input that did not fit. */
-        }
-        buffer[0] = '\0';
-        puts("Password is too long.");
-        return 0;
-    }
-    trim_newline(buffer);
-    return 1;
-}
-
-/* Overwrite a buffer through a volatile pointer so the clearing writes are kept. */
-void secure_clear(void *memory, size_t size) {
-    volatile unsigned char *bytes = (volatile unsigned char *)memory;
-    while (size--) {
-        *bytes++ = 0;
-    }
-}
