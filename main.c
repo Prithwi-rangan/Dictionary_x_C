@@ -43,13 +43,8 @@ static int command_line(int argc, char **argv) {
     }
     if (strcmp(operation, "memorized") == 0) return show_memorized() ? 0 : 1;
     if (strcmp(operation, "stats") == 0) return dictionary_stats() ? 0 : 1;
-    if (strcmp(operation, "exam") == 0) {
-        if (argc != 3 || (strcmp(argv[2], "10") != 0 && strcmp(argv[2], "30") != 0)) {
-            puts("Choose: wordmate exam 10 or wordmate exam 30.");
-            return 2;
-        }
-        return run_exam(atoi(argv[2])) ? 0 : 1;
-    }
+    if (strcmp(operation, "missing-beginner") == 0) return run_missing_letters(0) ? 0 : 1;
+    if (strcmp(operation, "missing-advanced") == 0) return run_missing_letters(1) ? 0 : 1;
     if (strcmp(operation, "hangman") == 0) return run_hangman() ? 0 : 1;
     if (strcmp(operation, "history") == 0) return show_activity_history() ? 0 : 1;
     if (strcmp(operation, "games") == 0) {

@@ -22,7 +22,7 @@ typedef struct {
     char meaning[MEANING_MAX];
 } Word;
 
-/* Games use shorter meaning buffers to keep their question pool compact. */
+/* Games use shorter meaning buffers to keep the random word pool compact. */
 typedef struct {
     char word[WORD_MAX];
     char meaning[GAME_MEANING_MAX];
@@ -45,7 +45,7 @@ int save_activity_result(const char *activity, int correct, int total,
                          int points, unsigned long duration_seconds);
 int show_activity_history(void);
 int games_menu(void);
-int run_exam(int question_count);
+int run_missing_letters(int advanced);
 int run_hangman(void);
 void run_menu(void);
 void print_help(const char *program);
