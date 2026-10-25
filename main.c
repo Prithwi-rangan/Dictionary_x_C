@@ -51,9 +51,7 @@ static int command_line(int argc, char **argv) {
         return run_exam(atoi(argv[2])) ? 0 : 1;
     }
     if (strcmp(operation, "hangman") == 0) return run_hangman() ? 0 : 1;
-    if (strcmp(operation, "history") == 0 || strcmp(operation, "performance") == 0) {
-        return show_activity_summary() ? 0 : 1;
-    }
+    if (strcmp(operation, "history") == 0) return show_activity_history() ? 0 : 1;
     if (strcmp(operation, "games") == 0) {
         games_menu();
         return 0;

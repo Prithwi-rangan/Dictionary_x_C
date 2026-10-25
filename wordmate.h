@@ -40,10 +40,10 @@ int dictionary_load_game_words(GameWord **words, size_t *count);
 /* Memorized word list. */
 int memorize_word(const char *word);
 int show_memorized(void);
-/* Activity history, performance summary, and learning games. */
+/* Activity history and learning games. */
 int save_activity_result(const char *activity, int correct, int total,
                          int points, unsigned long duration_seconds);
-int show_activity_summary(void);
+int show_activity_history(void);
 int games_menu(void);
 int run_exam(int question_count);
 int run_hangman(void);

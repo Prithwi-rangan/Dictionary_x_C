@@ -45,31 +45,25 @@ static int parse_result(char *line, char date[32], char activity[64],
                   date, activity, correct, total, points, duration, accuracy) == 7;
 }
 
-/* Show every saved activity and its combined performance summary together. */
-int show_activity_summary(void) {
+/* List each saved activity result. */
+int show_activity_history(void) {
     FILE *file = fopen(RESULTS_FILE, "r");
     char line[LINE_MAX];
     char date[32];
     char activity[64];
-    size_t activities = 0;
-    long long correct_total = 0;
-    long long question_total = 0;
-    double best_accuracy = -1.0;
-    int highest_points = -1;
-    char best_activity[64] = "none";
-    char highest_activity[64] = "none";
     int correct;
     int total;
     int points;
     unsigned long duration;
     double accuracy;
+    size_t shown = 0;
 
     if (!file) {
         puts("No activity results have been saved yet.");
         return 0;
     }
 
-    puts("\n=== Activity History and Performance ===");
+    puts("\n=== Activity History ===");
     puts("Date and time        Activity              Score    Accuracy   Points   Time");
     puts("--------------------------------------------------------------------------");
 
@@ -82,32 +76,13 @@ int show_activity_summary(void) {
         printf("%-20s %-21s %3d/%-3d %7.2f%% %7d %3lu:%02lu\n",
                date, activity, correct, total, accuracy, points,
                duration / 60, duration % 60);
-
-        activities++;
-        correct_total += correct;
-        question_total += total;
-        if (accuracy > best_accuracy) {
-            best_accuracy = accuracy;
-            snprintf(best_activity, sizeof(best_activity), "%s", activity);
-        }
-        if (points > highest_points) {
-            highest_points = points;
-            snprintf(highest_activity, sizeof(highest_activity), "%s", activity);
-        }
+        shown++;
     }
 
     fclose(file);
-    if (!activities || question_total == 0) {
+    if (!shown) {
         puts("No readable activity results were found.");
         return 0;
     }
-
-    puts("\nPerformance summary");
-    printf("Activities completed: %zu\nQuestions answered:   %lld\n"
-           "Overall accuracy:     %.2f%%\nBest accuracy:        %.2f%% (%s)\n"
-           "Highest score:        %d points (%s)\n",
-           activities, question_total,
-           100.0 * (double)correct_total / (double)question_total,
-           best_accuracy, best_activity, highest_points, highest_activity);
     return 1;
 }

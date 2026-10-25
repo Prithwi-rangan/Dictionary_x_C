@@ -204,7 +204,7 @@ int games_menu(void) {
     puts("\n=== Games and exams ===");
     puts("1. Vocabulary exam (10 or 30 questions)");
     puts("2. Project Hangman");
-    puts("3. Activity history and performance");
+    puts("3. Activity history");
     puts("0. Back to the main menu");
 
     if (!read_line("Choose: ", input, sizeof(input))) return 0;
@@ -232,7 +232,7 @@ int games_menu(void) {
     } else if (choice == 2) {
         run_hangman();
     } else if (choice == 3) {
-        show_activity_summary();
+        show_activity_history();
     } else {
         puts("Choose one of the listed options.");
     }

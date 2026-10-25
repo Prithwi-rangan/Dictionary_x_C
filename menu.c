@@ -37,7 +37,7 @@ void run_menu(void) {
         puts("6. Memorized words");
         puts("7. Dictionary statistics");
         puts("8. Vocabulary games and tests");
-        puts("9. Activity history and performance");
+        puts("9. Activity history");
         puts("0. Exit");
 
         if (!read_line("Choose: ", input, sizeof(input))) return;
@@ -87,7 +87,7 @@ void run_menu(void) {
                 should_pause = games_menu();
                 break;
             case 9:
-                show_activity_summary();
+                show_activity_history();
                 break;
             case 0:
                 return;
@@ -115,6 +115,6 @@ void print_help(const char *program) {
            "  games                        Open the vocabulary games menu\n"
            "  exam 10|30                   Start a multiple-choice exam\n"
            "  hangman                      Play Project Hangman\n"
-           "  history | performance        Show activity and performance\n\n"
+           "  history                      Show activity history\n\n"
            "The interactive menu starts when no command is provided.\n", program);
 }
